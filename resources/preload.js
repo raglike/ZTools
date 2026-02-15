@@ -606,7 +606,11 @@ window.ztools = {
     setFloatingBallEnabled: async (enabled) =>
       await electron.ipcRenderer.invoke('floating-ball:set-enabled', enabled),
     getFloatingBallEnabled: async () =>
-      await electron.ipcRenderer.invoke('floating-ball:get-enabled')
+      await electron.ipcRenderer.invoke('floating-ball:get-enabled'),
+    setFloatingBallLetter: async (letter) =>
+      await electron.ipcRenderer.invoke('floating-ball:set-letter', letter),
+    getFloatingBallLetter: async () =>
+      await electron.ipcRenderer.invoke('floating-ball:get-letter')
   }
 }
 
