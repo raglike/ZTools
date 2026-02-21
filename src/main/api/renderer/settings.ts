@@ -135,7 +135,7 @@ export class SettingsAPI {
   private setLaunchAtLogin(enable: boolean): void {
     app.setLoginItemSettings({
       openAtLogin: enable,
-      openAsHidden: false
+      openAsHidden: true
     })
     console.log('[Settings] 设置开机启动:', enable)
   }
