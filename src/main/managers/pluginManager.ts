@@ -309,8 +309,9 @@ class PluginManager {
       const [windowWidth] = this.mainWindow.getSize()
       let initialViewHeight: number | null = null
 
-      this.pluginView.setBounds({ x: 0, y: WINDOW_INITIAL_HEIGHT, width: windowWidth, height: 0 })
-      api.resizeWindow(WINDOW_INITIAL_HEIGHT)
+      // 设置初始高度为 1px，避免节流
+      this.pluginView.setBounds({ x: 0, y: WINDOW_INITIAL_HEIGHT, width: windowWidth, height: 1 })
+      api.resizeWindow(WINDOW_INITIAL_HEIGHT + 1)
 
       if (!isConfigHeadless) {
         initialViewHeight = this.pluginDefaultHeight
