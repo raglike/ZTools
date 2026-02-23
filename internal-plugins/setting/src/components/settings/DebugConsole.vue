@@ -385,8 +385,8 @@ onUnmounted(() => {
 }
 
 .level-filter-btn.active.level-info {
-  color: var(--primary-color);
-  background: var(--active-bg);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .level-filter-btn.active.level-debug {
@@ -497,7 +497,7 @@ onUnmounted(() => {
 }
 
 .badge-info {
-  background: var(--primary-color);
+  background: #10b981;
   color: white;
 }
 
@@ -614,9 +614,9 @@ onUnmounted(() => {
 }
 
 .status-btn.active {
-  background: var(--primary-color);
+  background: #10b981;
   color: white;
-  border-color: var(--primary-color);
+  border-color: #10b981;
 }
 
 .live-indicator {

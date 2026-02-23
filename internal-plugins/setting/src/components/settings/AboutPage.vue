@@ -479,7 +479,7 @@ async function handleAutoCheckUpdateChange(): Promise<void> {
   padding: 10px 32px;
   border-radius: 10px;
   border: none;
-  background: var(--primary-color);
+  background: #10b981;
   color: var(--text-on-primary);
   font-size: 15px;
   font-weight: 500;
@@ -491,7 +491,7 @@ async function handleAutoCheckUpdateChange(): Promise<void> {
 .check-update-btn:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .check-update-btn:active:not(:disabled) {
