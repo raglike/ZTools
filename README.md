@@ -300,7 +300,6 @@ ztools/
 ```bash
 git clone https://github.com/ZToolsCenter/ZTools.git --recurse-submodules
 ```
-3. 提 Pull requests
 
 ### 开发命令
 
