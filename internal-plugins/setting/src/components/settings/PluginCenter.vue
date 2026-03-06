@@ -44,11 +44,7 @@
                 </svg>
               </button>
               <div v-if="showMoreMenu" class="more-menu" @click="closeMoreMenu">
-                <button
-                  class="more-menu-item"
-                  :disabled="isImportingDev"
-                  @click="importDevPlugin"
-                >
+                <button class="more-menu-item" :disabled="isImportingDev" @click="importDevPlugin">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="16"
@@ -524,37 +520,6 @@ async function tryAutoAddDevPlugin(): Promise<void> {
   }
 }
 
-// 删除插件
-async function handleDeletePlugin(plugin: any): Promise<void> {
-  if (isDeleting.value) return
-
-  // 确认删除
-  const confirmed = await confirm({
-    title: '删除插件',
-    message: `确定要删除插件"${plugin.name}"吗？\n\n此操作将删除插件文件，无法恢复。`,
-    type: 'danger',
-    confirmText: '删除',
-    cancelText: '取消'
-  })
-  if (!confirmed) return
-
-  isDeleting.value = true
-  try {
-    const result = await window.ztools.internal.deletePlugin(plugin.path)
-    if (result.success) {
-      // 重新加载插件列表
-      await loadPlugins()
-    } else {
-      error(`插件删除失败: ${result.error}`)
-    }
-  } catch (err: any) {
-    console.error('删除插件失败:', err)
-    error(`删除插件失败: ${err.message || '未知错误'}`)
-  } finally {
-    isDeleting.value = false
-  }
-}
-
 // 从详情页面卸载插件（确认弹窗在 PluginDetail 中已展示，此处直接执行删除）
 async function handleUninstallFromDetail(plugin: any): Promise<void> {
   if (isDeleting.value) return
@@ -647,10 +612,6 @@ async function handleKillAllPlugins(): Promise<void> {
     // 显示结果
     if (failCount === 0) {
       success(`已停止所有插件（共 ${successCount} 个）`)
-      // 停止成功后返回搜索主界面
-      setTimeout(() => {
-        window.ztools.hideWindow()
-      }, 500)
     } else if (successCount === 0) {
       error(`停止失败（共 ${failCount} 个）`)
     } else {
@@ -802,20 +763,6 @@ onMounted(async () => {
   tryAutoAddDevPlugin()
   window.addEventListener('keydown', handleKeydown, true)
   window.addEventListener('click', handleClickOutside)
-
-  // 监听插件进入事件，确保每次进入时刷新状态
-  window.ztools.onPluginEnter(async (action) => {
-    console.log('PluginCenter: 插件进入，刷新状态')
-    // 重新加载插件列表和运行状态
-    await loadPlugins()
-    // 如果详情页面打开，同步更新 selectedPlugin
-    if (isDetailVisible.value && selectedPlugin.value) {
-      const updated = plugins.value.find((p) => p.path === selectedPlugin.value?.path)
-      if (updated) {
-        selectedPlugin.value = updated
-      }
-    }
-  })
 })
 
 onUnmounted(() => {
@@ -932,11 +879,13 @@ async function handleInstallFromNpm(data: {
 
 <style scoped>
 .content-panel {
-  position: relative; /* 使详情面板能够覆盖该区域 */
+  position: relative;
+  /* 使详情面板能够覆盖该区域 */
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 防止滑动时出现滚动条 */
+  overflow: hidden;
+  /* 防止滑动时出现滚动条 */
 }
 
 /* 可滚动内容区 */
@@ -1144,6 +1093,7 @@ async function handleInstallFromNpm(data: {
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -1240,6 +1190,7 @@ async function handleInstallFromNpm(data: {
   font-size: 14px;
   color: var(--text-secondary);
 }
+
 .empty-feature {
   font-size: 13px;
   color: var(--text-secondary);
