@@ -37,6 +37,7 @@ import pluginShellAPI from './plugin/shell'
 import pluginUIAPI from './plugin/ui'
 import pluginWindowAPI from './plugin/window'
 import { setupImageAnalysisAPI } from './shared/imageAnalysis'
+import zbrowserAPI from './plugin/zbrowser'
 
 import httpServer from '../core/httpServer'
 import superPanelManager from '../core/superPanelManager'
@@ -89,6 +90,9 @@ class APIManager {
     pluginRedirectAPI.init(mainWindow, pluginManager)
     pluginFeatureAPI.init(pluginManager)
     pluginHttpAPI.init(pluginManager)
+
+    // 初始化 zbrowser 浏览器自动化 API
+    zbrowserAPI.init(mainWindow, pluginManager)
 
     // 初始化内置插件专用API
     internalPluginAPI.init(mainWindow, pluginManager)
