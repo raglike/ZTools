@@ -239,8 +239,8 @@ function handleKeydown(e: KeyboardEvent): void {
 }
 
 useJumpFunction<PluginMarketSettingJumpFunction>((state) => {
-  if (state.autoOpenPluginName) {
-    setSubInput(state.autoOpenPluginName)
+  if (state.payload) {
+    setSubInput(state.payload)
   }
 })
 

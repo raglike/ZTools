@@ -46,9 +46,9 @@ addZtoolsCodeEventListener('function.plugin-market-search', async (e) => {
     const pluginInfo = pluginList.find((item) => item.name === payload)
     console.log(pluginInfo)
     if (pluginInfo) {
-      jumpFunctionPluginsSetting({ autoOpenPluginName: payload })
+      jumpFunctionPluginsSetting({ payload })
     } else {
-      jumpFunctionPluginMarketSetting({ autoOpenPluginName: payload })
+      jumpFunctionPluginMarketSetting({ payload })
     }
   }
 })

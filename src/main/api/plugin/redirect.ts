@@ -21,6 +21,27 @@ export class PluginRedirectAPI {
     ipcMain.on('ztools-redirect', (event, { label, payload }) => {
       event.returnValue = this.handleRedirect(label, payload)
     })
+
+    ipcMain.on('ztools-redirect-hotkey-setting', (event, cmdLabel: string) => {
+      try {
+        this.toSearchPage()
+        this.mainWindow?.webContents.send('ipc-launch', {
+          path: this.getSettingPluginPath(),
+          type: 'plugin',
+          featureCode: 'ui.router?router=Shortcuts',
+          name: '快捷键',
+          cmdType: 'text',
+          param: {
+            payload: cmdLabel,
+            type: 'text'
+          }
+        })
+        event.returnValue = true
+      } catch (error) {
+        console.error('[Redirect] 跳转快捷键设置失败:', error)
+        event.returnValue = false
+      }
+    })
   }
 
   /**
@@ -229,6 +250,18 @@ export class PluginRedirectAPI {
         body: body
       }).show()
     }
+  }
+
+  private getSettingPluginPath(): string {
+    const plugins = databaseAPI.dbGet('plugins')
+    if (!plugins || !Array.isArray(plugins)) {
+      throw new Error('未找到插件列表')
+    }
+    const settingPlugin = plugins.find((p: any) => p.name === 'setting')
+    if (!settingPlugin) {
+      throw new Error('未找到设置插件')
+    }
+    return settingPlugin.path
   }
 }
 

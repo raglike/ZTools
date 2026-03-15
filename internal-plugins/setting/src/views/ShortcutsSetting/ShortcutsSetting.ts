@@ -4,7 +4,7 @@ export interface ShortcutsSettingJumpFunction {
   /**
    * 设置快捷键设置路径，传这个参数会直接打开快捷键设置页面
    */
-  targetCommand?: string
+  payload?: string
 }
 
 /**

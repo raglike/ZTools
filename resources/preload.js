@@ -525,6 +525,9 @@ window.ztools = {
   // 插件跳转
   redirect: (label, payload) =>
     electron.ipcRenderer.sendSync('ztools-redirect', { label, payload }),
+  // 跳转到快捷键设置
+  redirectHotKeySetting: (cmdLabel) =>
+    electron.ipcRenderer.sendSync('ztools-redirect-hotkey-setting', cmdLabel),
   // HTTP 请求头设置
   http: {
     // 设置请求头

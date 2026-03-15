@@ -117,7 +117,7 @@ export function initZtoolsBaseEventHandler(options: InitBaseEventHandlerOptions 
       .replace({
         name: e.getParamsKey('router'),
         query: { ...e.params, t: Date.now() },
-        state: payload ? { autoOpenPluginName: payload } : undefined
+        state: payload ? { payload } : undefined
       })
       .then(() => {})
     if (height) {

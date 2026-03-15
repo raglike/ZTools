@@ -606,8 +606,8 @@ useJumpFunction((state) => {
   void loadRunningPlugins()
   if (state.localAddDevPluginFilePath) {
     void addDevPluginByFilePath(state.localAddDevPluginFilePath)
-  } else if (state.autoOpenPluginName) {
-    void openPluginByName(state.autoOpenPluginName)
+  } else if (state.payload) {
+    void openPluginByName(state.payload)
   }
 })
 

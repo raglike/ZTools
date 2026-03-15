@@ -429,7 +429,7 @@ async function handleMenuSelect(
     // 跳转到全局快捷键页面并打开添加面板，预填目标指令（插件标题/指令名称）
     const pluginTitle = selectedSource.value?.title || pluginName
     jumpFunctionShortcutsSetting({
-      targetCommand: `${pluginTitle}/${cmdName}`
+      payload: `${pluginTitle}/${cmdName}`
     })
   }
 }
