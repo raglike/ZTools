@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
+import { useToast } from '@/components/common/Toast'
 
 interface Props {
   modelValue: string
@@ -34,6 +35,57 @@ const MODIFIER_CODES = [
   'ShiftRight'
 ]
 
+// DOM e.code → Electron accelerator key name
+const CODE_TO_ACCELERATOR: Record<string, string> = {
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Space: 'Space',
+  Enter: 'Return',
+  Escape: 'Escape',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Insert: 'Insert',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  CapsLock: 'Capslock',
+  NumLock: 'Numlock',
+  ScrollLock: 'Scrolllock',
+  PrintScreen: 'PrintScreen',
+  // Numpad keys
+  Numpad0: 'num0',
+  Numpad1: 'num1',
+  Numpad2: 'num2',
+  Numpad3: 'num3',
+  Numpad4: 'num4',
+  Numpad5: 'num5',
+  Numpad6: 'num6',
+  Numpad7: 'num7',
+  Numpad8: 'num8',
+  Numpad9: 'num9',
+  NumpadDecimal: 'numdec',
+  NumpadAdd: 'numadd',
+  NumpadSubtract: 'numsub',
+  NumpadMultiply: 'nummult',
+  NumpadDivide: 'numdiv',
+  NumpadEnter: 'Return'
+}
+
 const DOUBLE_TAP_INTERVAL = 400
 const MODIFIER_NAMES = ['Command', 'Ctrl', 'Alt', 'Option', 'Shift']
 
@@ -42,6 +94,8 @@ function isDoubleTapFormat(value: string): boolean {
   const parts = value.split('+')
   return parts.length === 2 && parts[0] === parts[1] && MODIFIER_NAMES.includes(parts[0])
 }
+
+const { warning } = useToast()
 
 const isRecording = ref(false)
 const recordedKeys = ref<string[]>([])
@@ -151,12 +205,21 @@ function handleKeyDown(e: KeyboardEvent): void {
       mainKey = e.code.replace('Key', '')
     } else if (e.code.startsWith('Digit')) {
       mainKey = e.code.replace('Digit', '')
-    } else if (e.code.startsWith('Numpad')) {
+    } else if (/^F([1-9]|1\d|2[0-4])$/.test(e.code)) {
       mainKey = e.code
     } else {
-      mainKey = e.code
+      mainKey = CODE_TO_ACCELERATOR[e.code] || ''
     }
-    if (mainKey) keys.push(mainKey)
+
+    if (!mainKey) {
+      // 不支持的按键，toast 提示并回退
+      mainKeyPressed.value = false
+      warning(`不支持的按键: ${e.code}`)
+      stopRecording()
+      return
+    }
+
+    keys.push(mainKey)
   }
 
   recordedKeys.value = keys
