@@ -289,6 +289,13 @@ class PluginWindowManager {
       console.debug(`[pluginWindow:callback] dom-ready → trigger parent callback, winId=${win.id}`)
     })
 
+    win.webContents.on('render-process-gone', () => {
+      console.info(
+        `[pluginWindow:render-process-gone] winId=${win.id} unregistered from plugin=${pluginName}`
+      )
+      win.destroy()
+    })
+
     // 监听窗口关闭
     win.on('closed', () => {
       console.info(
