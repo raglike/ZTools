@@ -19,6 +19,7 @@ const props = defineProps<{
   showDisableToggle?: boolean
   showComments?: boolean
   showExportData?: boolean
+  showSize?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -125,6 +126,7 @@ function onSwitchTab(tabId: TabId): void {
       :plugin="plugin"
       :is-loading="isLoading"
       :can-upgrade="canUpgrade"
+      :show-size="showSize"
       @download="emit('download')"
       @upgrade="emit('upgrade')"
     >

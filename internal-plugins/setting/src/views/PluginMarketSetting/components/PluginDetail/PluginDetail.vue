@@ -65,6 +65,7 @@ function handleTabSwitch(tabId: TabId): void {
     :is-loading="isLoading"
     :is-running="isRunning"
     :show-comments="true"
+    :show-size="true"
     @back="$emit('back')"
     @open="$emit('open')"
     @download="$emit('download')"

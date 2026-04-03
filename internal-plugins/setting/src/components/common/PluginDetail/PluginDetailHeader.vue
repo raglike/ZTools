@@ -5,6 +5,7 @@ const props = defineProps<{
   plugin: PluginItem
   isLoading?: boolean
   canUpgrade: boolean
+  showSize?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -178,9 +179,9 @@ function openHomepage(): void {
         <div class="meta-value">{{ plugin.version || '-' }}</div>
       </div>
 
-      <div class="meta-divider"></div>
+      <div v-if="showSize" class="meta-divider"></div>
 
-      <div class="meta-item">
+      <div v-if="showSize" class="meta-item">
         <div class="meta-label">大小</div>
         <div class="meta-icon">
           <svg
