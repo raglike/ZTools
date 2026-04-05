@@ -100,9 +100,6 @@ export class PluginsAPI {
     ipcMain.handle('validate-dev-project', (_event, pluginName: string) =>
       this.devProjects.validateDevProject(pluginName)
     )
-    ipcMain.handle('reload-dev-project', (_event, pluginName: string) =>
-      this.devProjects.reloadDevProject(pluginName)
-    )
     ipcMain.handle('select-dev-project-config', (_event, pluginName: string) =>
       this.devProjects.selectDevProjectConfig(pluginName)
     )

@@ -294,6 +294,41 @@ export class InternalPluginAPI {
     })
 
     ipcMain.handle(
+      'internal:scaffold-dev-project',
+      async (
+        event,
+        params: {
+          template: 'vue-vite' | 'react-vite'
+          projectPath: string
+          name: string
+          title: string
+          description?: string
+          platform?: string[]
+          author?: string
+        }
+      ) => {
+        if (!requireInternalPlugin(this.pluginManager, event)) {
+          throw new PermissionDeniedError('internal:scaffold-dev-project')
+        }
+        return await pluginsAPI.devProjects.scaffoldDevProject(params)
+      }
+    )
+
+    ipcMain.handle(
+      'internal:update-dev-project-meta',
+      async (
+        event,
+        projectName: string,
+        meta: { title?: string; description?: string; platform?: string[]; author?: string }
+      ) => {
+        if (!requireInternalPlugin(this.pluginManager, event)) {
+          throw new PermissionDeniedError('internal:update-dev-project-meta')
+        }
+        return await pluginsAPI.devProjects.updateDevProjectMeta(projectName, meta)
+      }
+    )
+
+    ipcMain.handle(
       'internal:upsert-dev-project-by-config-path',
       async (event, pluginJsonPath: string) => {
         if (!requireInternalPlugin(this.pluginManager, event)) {
@@ -343,13 +378,6 @@ export class InternalPluginAPI {
         throw new PermissionDeniedError('internal:validate-dev-project')
       }
       return await pluginsAPI.devProjects.validateDevProject(pluginName)
-    })
-
-    ipcMain.handle('internal:reload-dev-project', async (event, pluginName: string) => {
-      if (!requireInternalPlugin(this.pluginManager, event)) {
-        throw new PermissionDeniedError('internal:reload-dev-project')
-      }
-      return await pluginsAPI.devProjects.reloadDevProject(pluginName)
     })
 
     ipcMain.handle(

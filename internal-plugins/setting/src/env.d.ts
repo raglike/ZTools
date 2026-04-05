@@ -95,8 +95,6 @@ declare global {
         uninstallDevPlugin: (pluginName: string) => Promise<{ success: boolean; error?: string }>
         // 校验当前设备绑定的开发项目配置
         validateDevProject: (pluginName: string) => Promise<{ success: boolean; error?: string }>
-        // 重新读取 plugin.json 并刷新开发项目元数据
-        reloadDevProject: (pluginName: string) => Promise<{ success: boolean; error?: string }>
         // 为当前设备重新选择开发项目配置文件
         selectDevProjectConfig: (
           pluginName: string

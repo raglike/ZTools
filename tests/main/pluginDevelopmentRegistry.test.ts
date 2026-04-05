@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyDevProjectsOrderUpdate,
+  reorderProjects,
   buildInstalledDevelopmentPlugin,
   canPackageDevProject,
   insertDevProjectAtTop,
-  rebindDevProjectFromConfig,
-  readDevPluginRegistryDoc,
-  upsertDevProjectFromConfig,
+  rebindByConfig,
+  readDevProjectRegistry,
+  upsertByConfig,
   validateRepairConfigSelection
 } from '../../src/main/api/renderer/pluginDevelopmentRegistry'
 
@@ -43,7 +43,7 @@ describe('pluginDevelopmentRegistry', () => {
       }
     }
 
-    const result = upsertDevProjectFromConfig({
+    const result = upsertByConfig({
       registry,
       pluginPath: '/workspace/other',
       pluginConfig: { name: 'demo', title: 'Demo', version: '1.0.0' }
@@ -56,7 +56,7 @@ describe('pluginDevelopmentRegistry', () => {
   it('rejects upsert for built-in plugin names', () => {
     const registry = { version: 3, projects: {} }
 
-    const result = upsertDevProjectFromConfig({
+    const result = upsertByConfig({
       registry,
       pluginPath: '/workspace/setting',
       pluginConfig: { name: 'setting', title: 'Setting', version: '1.0.0' }
@@ -84,7 +84,7 @@ describe('pluginDevelopmentRegistry', () => {
       }
     }
 
-    const result = upsertDevProjectFromConfig({
+    const result = upsertByConfig({
       registry,
       pluginPath: '/workspace/demo',
       pluginConfig: { name: 'demo', title: 'Demo', version: '1.0.0' },
@@ -103,7 +103,7 @@ describe('pluginDevelopmentRegistry', () => {
   it('rejects import when plugin configuration lacks name', () => {
     const registry = { version: 3, projects: {} }
 
-    const result = upsertDevProjectFromConfig({
+    const result = upsertByConfig({
       registry,
       pluginPath: '/workspace/nameless',
       pluginConfig: { title: 'Nameless' }
@@ -157,12 +157,12 @@ describe('pluginDevelopmentRegistry', () => {
   })
 
   it('normalizes invalid registry docs into an empty v3 payload', () => {
-    const registry = readDevPluginRegistryDoc({ version: 1, projects: [] })
+    const registry = readDevProjectRegistry({ version: 1, projects: [] })
     expect(registry).toEqual({ version: 3, projects: {} })
   })
 
   it('drops invalid and built-in entries when normalizing registry docs', () => {
-    const registry = readDevPluginRegistryDoc({
+    const registry = readDevProjectRegistry({
       version: 3,
       projects: {
         demo: {
@@ -197,7 +197,7 @@ describe('pluginDevelopmentRegistry', () => {
   })
 
   it('falls back to addedAt order when sortOrder is missing', () => {
-    const registry = readDevPluginRegistryDoc({
+    const registry = readDevProjectRegistry({
       version: 3,
       projects: {
         alpha: {
@@ -227,7 +227,7 @@ describe('pluginDevelopmentRegistry', () => {
   })
 
   it('appends unseen projects when applying a stale order payload', () => {
-    const next = applyDevProjectsOrderUpdate(
+    const next = reorderProjects(
       {
         version: 2,
         projects: {
@@ -316,7 +316,7 @@ describe('pluginDevelopmentRegistry', () => {
       'beta'
     )
 
-    const reordered = applyDevProjectsOrderUpdate(inserted, ['alpha', 'beta'])
+    const reordered = reorderProjects(inserted, ['alpha', 'beta'])
 
     expect(
       Object.values(reordered.projects)
@@ -326,7 +326,7 @@ describe('pluginDevelopmentRegistry', () => {
   })
 
   it('rebinds an existing project to a new config path while preserving sortOrder', () => {
-    const result = rebindDevProjectFromConfig({
+    const result = rebindByConfig({
       registry: {
         version: 3,
         projects: {
@@ -356,7 +356,7 @@ describe('pluginDevelopmentRegistry', () => {
   })
 
   it('rejects upsert when same-name project is registered at a different path', () => {
-    const result = upsertDevProjectFromConfig({
+    const result = upsertByConfig({
       registry: {
         version: 3,
         projects: {

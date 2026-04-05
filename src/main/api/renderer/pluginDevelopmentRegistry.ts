@@ -14,8 +14,8 @@ import { toDevPluginName } from '../../../shared/pluginRuntimeNamespace'
  */
 export type DevProjectBindingStatus = 'ready' | 'config_missing' | 'invalid_config' | 'unbound'
 
-/** plugin.json 的轻量级快照，仅保留注册表需要的字段 */
-export interface PluginConfigLite {
+/** plugin.json 的快照副本，仅保留注册表需要的字段 */
+export type PluginManifestSnapshot = {
   name?: string
   title?: string
   version?: string
@@ -27,10 +27,12 @@ export interface PluginConfigLite {
   features?: any[]
   /** 开发模式专用配置，如自定义 main 入口 */
   development?: { main?: string }
+  /** 插件可运行平台列表，如 ["win32", "darwin"] */
+  platform?: string[]
 }
 
-/** 已安装插件的轻量级快照，用于注册表与安装列表的交互 */
-export interface InstalledPluginLite {
+/** 已安装插件的快照记录，用于注册表与安装列表的交互 */
+export type PluginInstallRecord = {
   name?: string
   title?: string
   version?: string
@@ -49,11 +51,11 @@ export interface InstalledPluginLite {
 }
 
 /** 注册表中的单个开发项目记录 */
-export interface DevProjectRegistryEntry {
+export type DevProjectRecord = {
   /** 项目名称（与 plugin.json 中的 name 一致） */
   name: string
   /** plugin.json 的快照副本，用于在配置文件不可用时提供基本信息 */
-  configSnapshot: PluginConfigLite
+  configSnapshot: PluginManifestSnapshot
   /** 项目首次登记时间（ISO 格式） */
   addedAt: string
   /** 最近一次更新时间（ISO 格式） */
@@ -72,45 +74,58 @@ export interface DevProjectRegistryEntry {
   lastError?: string
 }
 
-/** 开发项目注册表的顶层文档结构（持久化到 LMDB） */
-export interface DevPluginRegistryDoc {
+/** 开发项目注册表的顶层结构（持久化到 LMDB） */
+export type DevProjectRegistry = {
   /** 文档版本号，用于升级迁移 */
-  version: typeof DEV_PLUGIN_REGISTRY_VERSION
+  version: typeof DEV_PROJECT_REGISTRY_VERSION
   /** 以项目名称为 key 的记录集合 */
-  projects: Record<string, DevProjectRegistryEntry>
+  projects: Record<string, DevProjectRecord>
 }
 
 /** upsertDevProjectFromConfig 的入参 */
-export interface UpsertDevProjectFromConfigOptions {
-  /** 当前注册表文档 */
-  registry: DevPluginRegistryDoc
+export type UpsertByConfigParams = {
+  /** 当前注册表 */
+  registry: DevProjectRegistry
   /** 插件项目目录路径 */
   pluginPath: string
   /** 从 plugin.json 解析的配置 */
-  pluginConfig: PluginConfigLite
+  pluginConfig: PluginManifestSnapshot
   /** 可选的时间戳工厂函数（用于测试注入） */
   now?: () => string
 }
 
 /** rebindDevProjectFromConfig 的入参 */
-export interface RebindDevProjectFromConfigOptions {
-  /** 当前注册表文档 */
-  registry: DevPluginRegistryDoc
+export type RebindByConfigParams = {
+  /** 当前注册表 */
+  registry: DevProjectRegistry
   /** 新的 plugin.json 绝对路径 */
   pluginJsonPath: string
   /** 从 plugin.json 解析的配置 */
-  pluginConfig: PluginConfigLite
+  pluginConfig: PluginManifestSnapshot
   /** 可选的时间戳工厂函数（用于测试注入） */
   now?: () => string
 }
 
-/** upsert / rebind 操作的返回结果 */
-export interface UpsertDevProjectFromConfigResult {
+/** mutation 操作的通用返回结果 */
+export type DevProjectMutationResult<T = object> = {
   success: boolean
   /** 失败原因描述 */
   reason?: string
   /** 操作后的注册表（无论成功与否均返回最新状态） */
-  registry: DevPluginRegistryDoc
+  registry: DevProjectRegistry
+} & T
+
+/** updateProjectMeta 的入参 */
+export type UpdateProjectMetaParams = {
+  registry: DevProjectRegistry
+  projectName: string
+  meta: {
+    title?: string
+    description?: string
+    platform?: string[]
+    author?: string
+  }
+  now?: () => string
 }
 
 // ============================================================
@@ -118,11 +133,11 @@ export interface UpsertDevProjectFromConfigResult {
 // ============================================================
 
 /** 注册表在 LMDB 中的存储键名 */
-export const DEV_PLUGIN_REGISTRY_DB_KEY = 'dev-plugin-registry'
+export const DEV_PROJECT_REGISTRY_DB_KEY = 'dev-plugin-registry'
 /** 当前注册表文档版本号，版本不匹配时重建空文档 */
-const DEV_PLUGIN_REGISTRY_VERSION = 3 as const
+const DEV_PROJECT_REGISTRY_VERSION = 3 as const
 /** 内置插件名称集合，这些名称不允许作为开发项目注册 */
-const BUILT_IN_PLUGIN_NAMES = new Set(['setting', 'system'])
+const BUILT_IN_NAMES = new Set(['setting', 'system'])
 /** 合法的绑定状态枚举值，用于反序列化时校验 */
 const VALID_BINDING_STATUSES = new Set<DevProjectBindingStatus>([
   'ready',
@@ -178,7 +193,7 @@ function normalizeOptionalPath(value: unknown): string | null {
  * sortOrder 相同时按 addedAt 倒序（最新优先）兜底
  * @param projects - 注册表中的所有项目记录
  */
-function getOrderedProjectNames(projects: Record<string, DevProjectRegistryEntry>): string[] {
+function getOrderedProjectNames(projects: Record<string, DevProjectRecord>): string[] {
   return Object.values(projects)
     .sort((a, b) => {
       const orderA = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER
@@ -196,8 +211,8 @@ function getOrderedProjectNames(projects: Record<string, DevProjectRegistryEntry
 // ============================================================
 
 /** 创建一个空的注册表文档（当前版本） */
-export function createEmptyDevPluginRegistryDoc(): DevPluginRegistryDoc {
-  return { version: DEV_PLUGIN_REGISTRY_VERSION, projects: {} }
+export function createEmptyDevProjectRegistry(): DevProjectRegistry {
+  return { version: DEV_PROJECT_REGISTRY_VERSION, projects: {} }
 }
 
 /**
@@ -212,8 +227,8 @@ function parseRegistryEntry(
   name: string,
   raw: any,
   fallbackTimestamp: string
-): { entry: DevProjectRegistryEntry; rawSortOrder: number | null } | null {
-  if (!name || BUILT_IN_PLUGIN_NAMES.has(name)) return null
+): { entry: DevProjectRecord; rawSortOrder: number | null } | null {
+  if (!name || BUILT_IN_NAMES.has(name)) return null
   if (!raw || typeof raw !== 'object') return null
   if (typeof raw.name !== 'string' || raw.name !== name) return null
   if (
@@ -238,7 +253,7 @@ function parseRegistryEntry(
   return {
     entry: {
       name,
-      configSnapshot: { ...(raw.configSnapshot as PluginConfigLite) },
+      configSnapshot: { ...(raw.configSnapshot as PluginManifestSnapshot) },
       addedAt: normalizeTimestamp(raw.addedAt, fallbackTimestamp),
       updatedAt: normalizeTimestamp(raw.updatedAt, fallbackTimestamp),
       sortOrder: -1,
@@ -256,15 +271,15 @@ function parseRegistryEntry(
  * 反序列化并规范化开发项目主记录文档（v3）。
  * 无效或过时的文档会被替换为空注册表。
  */
-export function readDevPluginRegistryDoc(raw: unknown): DevPluginRegistryDoc {
-  const emptyDoc = createEmptyDevPluginRegistryDoc()
+export function readDevProjectRegistry(raw: unknown): DevProjectRegistry {
+  const emptyDoc = createEmptyDevProjectRegistry()
   if (!raw || typeof raw !== 'object') return emptyDoc
   const doc = raw as { version?: unknown; projects?: unknown }
-  if (doc.version !== DEV_PLUGIN_REGISTRY_VERSION) return emptyDoc
+  if (doc.version !== DEV_PROJECT_REGISTRY_VERSION) return emptyDoc
   if (!doc.projects || typeof doc.projects !== 'object' || Array.isArray(doc.projects))
     return emptyDoc
 
-  const projects: Record<string, DevProjectRegistryEntry> = {}
+  const projects: Record<string, DevProjectRecord> = {}
   const pendingSortOrders = new Map<string, number | null>()
   const fallbackTimestamp = nowIso()
 
@@ -286,7 +301,7 @@ export function readDevPluginRegistryDoc(raw: unknown): DevPluginRegistryDoc {
       pendingSortOrders.get(name) ?? fallbackOrder.get(name) ?? Number.MAX_SAFE_INTEGER
   }
 
-  return { version: DEV_PLUGIN_REGISTRY_VERSION, projects }
+  return { version: DEV_PROJECT_REGISTRY_VERSION, projects }
 }
 
 // ============================================================
@@ -300,9 +315,7 @@ export function readDevPluginRegistryDoc(raw: unknown): DevPluginRegistryDoc {
  * @param options - 包含注册表、插件路径和配置的选项对象
  * @returns 操作结果，包含成功标志和更新后的注册表
  */
-export function upsertDevProjectFromConfig(
-  options: UpsertDevProjectFromConfigOptions
-): UpsertDevProjectFromConfigResult {
+export function upsertByConfig(options: UpsertByConfigParams): DevProjectMutationResult {
   const clock = options.now ?? nowIso
   const normalizedPath = resolvePath(options.pluginPath)
   const projectName = options.pluginConfig.name
@@ -310,7 +323,7 @@ export function upsertDevProjectFromConfig(
   if (!projectName) {
     return { success: false, reason: 'Project config requires a name', registry: options.registry }
   }
-  if (BUILT_IN_PLUGIN_NAMES.has(projectName)) {
+  if (BUILT_IN_NAMES.has(projectName)) {
     return {
       success: false,
       reason: `Project name ${projectName} is not allowed`,
@@ -331,7 +344,7 @@ export function upsertDevProjectFromConfig(
   return {
     success: true,
     registry: {
-      version: DEV_PLUGIN_REGISTRY_VERSION,
+      version: DEV_PROJECT_REGISTRY_VERSION,
       projects: {
         ...options.registry.projects,
         [projectName]: {
@@ -356,16 +369,14 @@ export function upsertDevProjectFromConfig(
  * @param options - 包含注册表、新 plugin.json 路径和配置的选项对象
  * @returns 操作结果，项目不存在时返回失败
  */
-export function rebindDevProjectFromConfig(
-  options: RebindDevProjectFromConfigOptions
-): UpsertDevProjectFromConfigResult {
+export function rebindByConfig(options: RebindByConfigParams): DevProjectMutationResult {
   const clock = options.now ?? nowIso
   const projectName = options.pluginConfig.name
 
   if (!projectName) {
     return { success: false, reason: 'Project config requires a name', registry: options.registry }
   }
-  if (BUILT_IN_PLUGIN_NAMES.has(projectName)) {
+  if (BUILT_IN_NAMES.has(projectName)) {
     return {
       success: false,
       reason: `Project name ${projectName} is not allowed`,
@@ -387,7 +398,7 @@ export function rebindDevProjectFromConfig(
   return {
     success: true,
     registry: {
-      version: DEV_PLUGIN_REGISTRY_VERSION,
+      version: DEV_PROJECT_REGISTRY_VERSION,
       projects: {
         ...options.registry.projects,
         [projectName]: {
@@ -412,10 +423,10 @@ export function rebindDevProjectFromConfig(
  * @returns 更新排序后的新注册表文档
  * @throws {Error} 当 pluginNames 包含不存在的项目名时抛出
  */
-export function applyDevProjectsOrderUpdate(
-  registry: DevPluginRegistryDoc,
+export function reorderProjects(
+  registry: DevProjectRegistry,
   pluginNames: string[]
-): DevPluginRegistryDoc {
+): DevProjectRegistry {
   const currentNames = getOrderedProjectNames(registry.projects)
   const currentNameSet = new Set(currentNames)
 
@@ -424,7 +435,7 @@ export function applyDevProjectsOrderUpdate(
   }
 
   const merged = [...pluginNames, ...currentNames.filter((n) => !pluginNames.includes(n))]
-  const nextProjects: Record<string, DevProjectRegistryEntry> = {}
+  const nextProjects: Record<string, DevProjectRecord> = {}
   for (const [index, name] of merged.entries()) {
     const current = registry.projects[name]
     if (current) nextProjects[name] = { ...current, sortOrder: index }
@@ -441,9 +452,9 @@ export function applyDevProjectsOrderUpdate(
  * @returns 更新排序后的新注册表文档
  */
 export function insertDevProjectAtTop(
-  registry: DevPluginRegistryDoc,
+  registry: DevProjectRegistry,
   projectName: string
-): DevPluginRegistryDoc {
+): DevProjectRegistry {
   if (!registry.projects[projectName]) return registry
 
   const orderedNames = getOrderedProjectNames(registry.projects).filter((n) => n !== projectName)
@@ -466,7 +477,7 @@ export function insertDevProjectAtTop(
  * 仅在状态为 'ready' 时允许打包。
  * @param entry - 注册表条目
  */
-export function canPackageDevProject(entry?: DevProjectRegistryEntry): boolean {
+export function canPackageDevProject(entry?: DevProjectRecord): boolean {
   return entry?.status === 'ready'
 }
 
@@ -478,8 +489,8 @@ export function canPackageDevProject(entry?: DevProjectRegistryEntry): boolean {
  * @returns 名称是否一致
  */
 export function validateRepairConfigSelection(
-  registryItem: DevProjectRegistryEntry,
-  pluginConfig: PluginConfigLite
+  registryItem: DevProjectRecord,
+  pluginConfig: PluginManifestSnapshot
 ): boolean {
   return !!pluginConfig.name && pluginConfig.name === registryItem.name
 }
@@ -493,12 +504,12 @@ export function validateRepairConfigSelection(
  */
 export function buildInstalledDevelopmentPlugin(
   pluginPath: string,
-  pluginConfig: PluginConfigLite
-): InstalledPluginLite {
+  pluginConfig: PluginManifestSnapshot
+): PluginInstallRecord {
   const normalizedPath = resolvePath(pluginPath)
   const baseName = pluginConfig.name || path.basename(normalizedPath)
   // 内置插件（setting、system）在开发模式下仅设 isDevelopment: true 而不加 __dev 后缀
-  const effectiveName = BUILT_IN_PLUGIN_NAMES.has(baseName) ? baseName : toDevPluginName(baseName)
+  const effectiveName = BUILT_IN_NAMES.has(baseName) ? baseName : toDevPluginName(baseName)
   return {
     name: effectiveName,
     title: pluginConfig.title,
@@ -513,5 +524,52 @@ export function buildInstalledDevelopmentPlugin(
     path: normalizedPath,
     isDevelopment: true,
     installedAt: nowIso()
+  }
+}
+
+// ============================================================
+// Metadata Updates
+// ============================================================
+
+/**
+ * 更新开发项目的元数据，直接写入 configSnapshot 对应字段。
+ */
+export function updateProjectMeta(options: UpdateProjectMetaParams): DevProjectMutationResult {
+  const clock = options.now ?? nowIso
+  const { projectName, meta } = options
+
+  const existing = options.registry.projects[projectName]
+  if (!existing) {
+    return {
+      success: false,
+      reason: `开发项目 "${projectName}" 不存在`,
+      registry: options.registry
+    }
+  }
+
+  const ts = clock()
+  const updatedEntry: DevProjectRecord = {
+    ...existing,
+    configSnapshot: {
+      ...existing.configSnapshot,
+      ...(meta.title ? { title: meta.title } : {}),
+      ...(meta.description !== undefined ? { description: meta.description } : {}),
+      ...(meta.author !== undefined ? { author: meta.author } : {}),
+      ...(Array.isArray(meta.platform) && meta.platform.length > 0
+        ? { platform: meta.platform }
+        : {})
+    },
+    updatedAt: ts
+  }
+
+  return {
+    success: true,
+    registry: {
+      version: options.registry.version,
+      projects: {
+        ...options.registry.projects,
+        [projectName]: updatedEntry
+      }
+    }
   }
 }

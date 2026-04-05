@@ -7,17 +7,18 @@ import { toDevPluginName } from '../../../shared/pluginRuntimeNamespace'
 import { packZpx } from '../../utils/zpxArchive.js'
 import databaseAPI from '../shared/database'
 import {
-  DEV_PLUGIN_REGISTRY_DB_KEY,
-  applyDevProjectsOrderUpdate,
+  DEV_PROJECT_REGISTRY_DB_KEY,
+  reorderProjects,
   buildInstalledDevelopmentPlugin,
   canPackageDevProject,
   insertDevProjectAtTop,
-  readDevPluginRegistryDoc,
-  rebindDevProjectFromConfig,
-  upsertDevProjectFromConfig,
+  readDevProjectRegistry,
+  rebindByConfig,
+  updateProjectMeta,
+  upsertByConfig,
   validateRepairConfigSelection,
-  type DevPluginRegistryDoc,
-  type DevProjectRegistryEntry
+  type DevProjectRegistry,
+  type DevProjectRecord
 } from './pluginDevelopmentRegistry'
 
 // ============================================================
@@ -86,13 +87,13 @@ export class PluginDevProjectsAPI {
   // ---- Registry persistence ----
 
   /** 从 LMDB 读取并反序列化开发项目注册表 */
-  private readRegistry(): DevPluginRegistryDoc {
-    return readDevPluginRegistryDoc(databaseAPI.dbGet(DEV_PLUGIN_REGISTRY_DB_KEY))
+  private readRegistry(): DevProjectRegistry {
+    return readDevProjectRegistry(databaseAPI.dbGet(DEV_PROJECT_REGISTRY_DB_KEY))
   }
 
   /** 将注册表序列化并写入 LMDB */
-  private writeRegistry(registry: DevPluginRegistryDoc): void {
-    databaseAPI.dbPut(DEV_PLUGIN_REGISTRY_DB_KEY, registry)
+  private writeRegistry(registry: DevProjectRegistry): void {
+    databaseAPI.dbPut(DEV_PROJECT_REGISTRY_DB_KEY, registry)
   }
 
   // ---- Config validation & refresh ----
@@ -107,12 +108,12 @@ export class PluginDevProjectsAPI {
    */
   private async validateAndRefreshState(
     projectName: string,
-    registry?: DevPluginRegistryDoc
+    registry?: DevProjectRegistry
   ): Promise<{
     success: boolean
     error?: string
-    registry: DevPluginRegistryDoc
-    entry?: DevProjectRegistryEntry
+    registry: DevProjectRegistry
+    entry?: DevProjectRecord
     pluginConfig?: any
   }> {
     const currentRegistry = registry ?? this.readRegistry()
@@ -127,7 +128,7 @@ export class PluginDevProjectsAPI {
 
     if (!registryEntry.projectPath || !registryEntry.configPath) {
       const now = new Date().toISOString()
-      const nextRegistry: DevPluginRegistryDoc = {
+      const nextRegistry: DevProjectRegistry = {
         ...currentRegistry,
         projects: {
           ...currentRegistry.projects,
@@ -157,7 +158,7 @@ export class PluginDevProjectsAPI {
 
     let usedConfigPath = registryEntry.configPath
     let pluginConfig: any | null = null
-    let validationStatus: DevProjectRegistryEntry['status'] = 'config_missing'
+    let validationStatus: DevProjectRecord['status'] = 'config_missing'
     let lastError = 'plugin.json 文件不存在'
 
     for (const candidatePath of candidateConfigPaths) {
@@ -193,7 +194,7 @@ export class PluginDevProjectsAPI {
       }
     }
 
-    const nextEntry: DevProjectRegistryEntry = {
+    const nextEntry: DevProjectRecord = {
       ...registryEntry,
       projectPath: usedConfigPath ? path.dirname(usedConfigPath) : registryEntry.projectPath,
       configPath: usedConfigPath,
@@ -206,7 +207,7 @@ export class PluginDevProjectsAPI {
       delete nextEntry.lastError
     }
 
-    const nextRegistry: DevPluginRegistryDoc = {
+    const nextRegistry: DevProjectRegistry = {
       ...currentRegistry,
       projects: { ...currentRegistry.projects, [projectName]: nextEntry }
     }
@@ -298,6 +299,9 @@ export class PluginDevProjectsAPI {
           features: Array.isArray(project.configSnapshot.features)
             ? project.configSnapshot.features
             : [],
+          platform: Array.isArray(project.configSnapshot.platform)
+            ? project.configSnapshot.platform
+            : [],
           developmentMain: project.configSnapshot.development?.main,
           path: projectPath,
           configPath: project.configPath || null,
@@ -327,7 +331,7 @@ export class PluginDevProjectsAPI {
   public async updateDevProjectsOrder(pluginNames: string[]): Promise<any> {
     try {
       const registry = this.readRegistry()
-      this.writeRegistry(applyDevProjectsOrderUpdate(registry, pluginNames))
+      this.writeRegistry(reorderProjects(registry, pluginNames))
       this.deps.notifyPluginsChanged()
       return { success: true }
     } catch (error) {
@@ -385,7 +389,7 @@ export class PluginDevProjectsAPI {
       const registry = this.readRegistry()
       const projectName = pluginConfig.name
       const isNew = !registry.projects[projectName]
-      const upserted = upsertDevProjectFromConfig({ registry, pluginPath, pluginConfig })
+      const upserted = upsertByConfig({ registry, pluginPath, pluginConfig })
       if (!upserted.success) {
         return { success: false, error: upserted.reason || '开发项目登记失败' }
       }
@@ -450,7 +454,7 @@ export class PluginDevProjectsAPI {
         return await this.importDevPlugin(configPath)
       }
 
-      const rebound = rebindDevProjectFromConfig({
+      const rebound = rebindByConfig({
         registry,
         pluginJsonPath: configPath,
         pluginConfig
@@ -497,7 +501,7 @@ export class PluginDevProjectsAPI {
 
   /**
    * 将开发项目安装到已安装插件列表（开发模式）。
-   * 会先校验项目状态，然后构建 InstalledPluginLite 并写入数据库。
+   * 会先校验项目状态，然后构建 PluginInstallRecord 并写入数据库。
    * @param projectName - 项目名称
    * @returns {success: boolean, pluginName?: string, error?: string}
    */
@@ -580,7 +584,7 @@ export class PluginDevProjectsAPI {
   /**
    * 校验开发项目的 plugin.json 状态并刷新注册表。
    * @param projectName - 项目名称
-   * @returns {success: boolean, pluginName?: string, binding?: DevProjectRegistryEntry, error?: string}
+   * @returns {success: boolean, pluginName?: string, binding?: DevProjectRecord, error?: string}
    */
   public async validateDevProject(projectName: string): Promise<any> {
     try {
@@ -594,51 +598,6 @@ export class PluginDevProjectsAPI {
       return { success: true, pluginName: projectName, binding: validated.entry }
     } catch (error: unknown) {
       console.error('[DevProjects] 校验失败:', error)
-      return { success: false, error: formatError(error) }
-    }
-  }
-
-  /**
-   * 重载开发模式插件：重新读取 plugin.json 并更新已安装插件数据。
-   * 兼容内置插件（name 不带 __dev 后缀）和用户开发插件（带 __dev 后缀）。
-   * @param projectName - 项目名称
-   * @returns {success: boolean, pluginName?: string, error?: string}
-   */
-  public async reloadDevProject(projectName: string): Promise<any> {
-    try {
-      const registry = this.readRegistry()
-      if (!registry.projects[projectName]) return { success: false, error: '开发项目不存在' }
-
-      const validated = await this.validateAndRefreshState(projectName, registry)
-      if (!validated.success || !validated.entry || !validated.pluginConfig) {
-        return { success: false, error: validated.error || '开发项目校验失败' }
-      }
-      if (!validated.entry.projectPath) {
-        return { success: false, error: '开发项目未绑定有效路径' }
-      }
-
-      const plugins = this.deps.readInstalledPlugins()
-      // 兼容内置插件（name 不带 __dev 后缀）和用户开发插件（name 带 __dev 后缀）
-      const devName = toDevPluginName(projectName)
-      const devIndex = plugins.findIndex(
-        (p) => p?.isDevelopment && (p?.name === devName || p?.name === projectName)
-      )
-      if (devIndex >= 0) {
-        const oldPlugin = plugins[devIndex]
-        const projectPath = path.resolve(validated.entry.projectPath)
-        plugins[devIndex] = {
-          ...oldPlugin,
-          ...buildInstalledDevelopmentPlugin(projectPath, validated.pluginConfig),
-          logo: this.deps.resolvePluginLogo(projectPath, validated.pluginConfig.logo),
-          installedAt: oldPlugin.installedAt || new Date().toISOString()
-        }
-        this.deps.writeInstalledPlugins(plugins)
-      }
-
-      this.deps.notifyPluginsChanged()
-      return { success: true, pluginName: projectName }
-    } catch (error: unknown) {
-      console.error('[DevProjects] 重载失败:', error)
       return { success: false, error: formatError(error) }
     }
   }
@@ -693,7 +652,7 @@ export class PluginDevProjectsAPI {
       }
 
       const now = new Date().toISOString()
-      const nextRegistry: DevPluginRegistryDoc = {
+      const nextRegistry: DevProjectRegistry = {
         ...registry,
         projects: {
           ...registry.projects,
@@ -724,6 +683,150 @@ export class PluginDevProjectsAPI {
   }
 
   /**
+   * 更新开发项目的元数据，同时同步写入磁盘 plugin.json。
+   */
+  public async updateDevProjectMeta(
+    projectName: string,
+    meta: { title?: string; description?: string; platform?: string[]; author?: string }
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const registry = this.readRegistry()
+      const result = updateProjectMeta({ registry, projectName, meta })
+      if (!result.success) {
+        return { success: false, error: result.reason || '更新失败' }
+      }
+      this.writeRegistry(result.registry)
+
+      // 同步写入磁盘 plugin.json
+      const entry = result.registry.projects[projectName]
+      if (entry?.configPath) {
+        try {
+          const raw = await fs.readFile(entry.configPath, 'utf-8')
+          const parsed = JSON.parse(raw)
+          if (meta.title !== undefined) parsed.title = meta.title
+          if (meta.description !== undefined) parsed.description = meta.description
+          if (meta.author !== undefined) parsed.author = meta.author
+          if (Array.isArray(meta.platform) && meta.platform.length > 0) {
+            parsed.platform = meta.platform
+          }
+          await fs.writeFile(entry.configPath, JSON.stringify(parsed, null, 2), 'utf-8')
+        } catch (err) {
+          console.warn('[DevProjects] 同步 plugin.json 失败:', err)
+        }
+      }
+
+      this.deps.notifyPluginsChanged()
+      return { success: true }
+    } catch (error: unknown) {
+      console.error('[DevProjects] 更新元数据失败:', error)
+      return { success: false, error: formatError(error) }
+    }
+  }
+
+  /**
+   * 从模板创建开发项目。
+   * 将模板目录复制到目标路径，替换 plugin.json 和 package.json 中的占位符，
+   * 然后自动导入为开发项目。
+   */
+  public async scaffoldDevProject(params: {
+    template: 'vue-vite' | 'react-vite'
+    projectPath: string
+    name: string
+    title: string
+    description?: string
+    platform?: string[]
+    author?: string
+  }): Promise<{ success: boolean; pluginName?: string; error?: string }> {
+    try {
+      const {
+        template,
+        projectPath: targetDir,
+        name,
+        title,
+        description,
+        platform,
+        author
+      } = params
+
+      // 定位开发者插件的安装目录（优先使用开发版本，因为正式安装版可能不含模板）
+      const installedPlugins = this.deps.readInstalledPlugins()
+      const devVersionPlugin = installedPlugins.find(
+        (p) => p?.name === 'ztools-developer-plugin__dev'
+      )
+      const prodVersionPlugin = installedPlugins.find((p) => p?.name === 'ztools-developer-plugin')
+      const devPlugin = devVersionPlugin || prodVersionPlugin
+      if (!devPlugin?.path) {
+        return { success: false, error: '开发者工具插件未安装' }
+      }
+
+      const templateDir = path.join(devPlugin.path, template)
+      try {
+        await fs.access(templateDir)
+      } catch {
+        return { success: false, error: `模板 "${template}" 不存在（路径: ${templateDir}）` }
+      }
+
+      // 目标目录为 targetDir/name
+      const projectDir = path.join(targetDir, name)
+      try {
+        const stat = await fs.stat(projectDir).catch(() => null)
+        if (stat) {
+          return { success: false, error: `目录 "${projectDir}" 已存在` }
+        }
+      } catch {
+        /* 目录不存在，继续 */
+      }
+
+      // 递归复制模板
+      await fs.cp(templateDir, projectDir, { recursive: true })
+
+      // 替换 plugin.json 占位符
+      const pluginJsonPath = path.join(projectDir, 'public', 'plugin.json')
+      try {
+        let pluginJson = await fs.readFile(pluginJsonPath, 'utf-8')
+        pluginJson = pluginJson
+          .replace(/\{\{PLUGIN_NAME\}\}/g, name)
+          .replace(/\{\{PLUGIN_TITLE\}\}/g, title)
+          .replace(/\{\{DESCRIPTION\}\}/g, description || '')
+          .replace(/\{\{AUTHOR\}\}/g, author || '')
+        // 注入 platform
+        if (Array.isArray(platform) && platform.length > 0) {
+          const parsed = JSON.parse(pluginJson)
+          parsed.platform = platform
+          pluginJson = JSON.stringify(parsed, null, 2)
+        }
+        await fs.writeFile(pluginJsonPath, pluginJson, 'utf-8')
+      } catch (err) {
+        console.warn('[DevProjects] 替换 plugin.json 占位符失败:', err)
+      }
+
+      // 替换 package.json 占位符
+      const packageJsonPath = path.join(projectDir, 'package.json')
+      try {
+        let packageJson = await fs.readFile(packageJsonPath, 'utf-8')
+        packageJson = packageJson
+          .replace(/\{\{PROJECT_NAME\}\}/g, name)
+          .replace(/\{\{DESCRIPTION\}\}/g, description || '')
+        await fs.writeFile(packageJsonPath, packageJson, 'utf-8')
+      } catch (err) {
+        console.warn('[DevProjects] 替换 package.json 占位符失败:', err)
+      }
+
+      // 自动导入
+      const result = await this.upsertDevProjectByConfigPath(pluginJsonPath)
+      if (!result?.success) {
+        return { success: false, error: result?.error || '导入创建的项目失败' }
+      }
+
+      console.log('[DevProjects] 项目已从模板创建:', { template, projectDir, name })
+      return { success: true, pluginName: result.pluginName || name }
+    } catch (error: unknown) {
+      console.error('[DevProjects] 模板创建失败:', error)
+      return { success: false, error: formatError(error) }
+    }
+  }
+
+  /**
    * 将开发项目打包为 ZPX 文件。
    * 校验项目状态为 ready 后弹出保存对话框，将项目目录打包为 .zpx 文件。
    * @param projectName - 项目名称
@@ -749,6 +852,17 @@ export class PluginDevProjectsAPI {
       }
       if (!validated.entry.projectPath) {
         return { success: false, error: '开发项目未绑定有效路径' }
+      }
+
+      // 检查 main 入口文件是否存在
+      const mainFile = validated.pluginConfig?.main
+      if (mainFile) {
+        const mainPath = path.resolve(validated.entry.projectPath, mainFile)
+        try {
+          await fs.access(mainPath)
+        } catch {
+          return { success: false, error: `main 入口文件不存在: ${mainFile}` }
+        }
       }
 
       // 确定实际打包目录

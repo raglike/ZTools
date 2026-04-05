@@ -826,6 +826,10 @@ window.ztools = {
       await electron.ipcRenderer.invoke('internal:install-plugin-from-path', zpxPath),
     importDevPlugin: async (pluginPath) =>
       await electron.ipcRenderer.invoke('internal:import-dev-plugin', pluginPath),
+    scaffoldDevProject: async (params) =>
+      await electron.ipcRenderer.invoke('internal:scaffold-dev-project', params),
+    updateDevProjectMeta: async (projectName, meta) =>
+      await electron.ipcRenderer.invoke('internal:update-dev-project-meta', projectName, meta),
     upsertDevProjectByConfigPath: async (pluginJsonPath) =>
       await electron.ipcRenderer.invoke(
         'internal:upsert-dev-project-by-config-path',
@@ -839,8 +843,6 @@ window.ztools = {
       await electron.ipcRenderer.invoke('internal:uninstall-dev-plugin', pluginPath),
     validateDevProject: async (pluginName) =>
       await electron.ipcRenderer.invoke('internal:validate-dev-project', pluginName),
-    reloadDevProject: async (pluginName) =>
-      await electron.ipcRenderer.invoke('internal:reload-dev-project', pluginName),
     selectDevProjectConfig: async (pluginName, configPath) =>
       await electron.ipcRenderer.invoke(
         'internal:select-dev-project-config',
