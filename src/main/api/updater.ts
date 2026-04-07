@@ -390,8 +390,6 @@ export class UpdaterAPI {
    * 检查更新
    */
   public async checkUpdate(): Promise<any> {
-=======
-  private async checkUpdate(): Promise<any> {
     // 暂时关闭版本检查功能
     let tempDisable = true
     if (tempDisable) {
